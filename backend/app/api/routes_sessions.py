@@ -1,5 +1,6 @@
 """Session lifecycle routes: create, fetch, approve connection, approve/reject commands, abort."""
 
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, Request
@@ -24,6 +25,33 @@ from ..state import sessions, ssh_runners
 from .websocket import broadcast
 
 router = APIRouter(tags=["sessions"])
+
+
+def _resolve_key_path(customer_id: int, system_key_path: str | None) -> str:
+    """Return the SSH private key path for this customer VM.
+
+    Priority:
+    1. ERP-provided key_path on the system info
+    2. keys/<customer_id>_key.pem  (exact customer_id match)
+    3. keys/case<N>_key.pem where N = customer_id - 5000  (hackathon convention)
+    4. Global default from settings
+    """
+    if system_key_path:
+        return system_key_path
+
+    keys_dir = settings.ssh_keys_dir
+
+    by_customer = os.path.join(keys_dir, f"{customer_id}_key.pem")
+    if os.path.isfile(by_customer):
+        return by_customer
+
+    case_index = customer_id - 5000
+    if case_index > 0:
+        by_case = os.path.join(keys_dir, f"case{case_index}_key.pem")
+        if os.path.isfile(by_case):
+            return by_case
+
+    return settings.ssh_private_key_path
 
 
 def _not_found(session_id: str) -> JSONResponse:
@@ -149,7 +177,8 @@ async def approve_connection(session_id: str, body: ApproveConnectionRequest):
     audit_logger.add_event(str(session.ticket_id), session_id, "technician", "connection_approved", "Technician approved SSH connection")
 
     system = session.customer_system.system  # type: ignore[union-attr]
-    key_path = settings.ssh_private_key_path
+    customer_id = session.customer_system.customer_id  # type: ignore[union-attr]
+    key_path = _resolve_key_path(customer_id, system.key_path)
 
     runner = SSHRunner(
         host=system.ip,
@@ -176,7 +205,7 @@ async def approve_connection(session_id: str, body: ApproveConnectionRequest):
     session.started_at = datetime.utcnow()
     sessions[session_id] = session
 
-    audit_logger.add_event(str(session.ticket_id), session_id, "system", "ssh_connected", f"SSH connected to {system.ip}:{system.port} as {system.username}")
+    audit_logger.add_event(str(session.ticket_id), session_id, "system", "ssh_connected", f"SSH connected to {system.ip}:{system.port} as {system.username} using key {os.path.basename(key_path)}")
     await _broadcast_session(session)
     await _broadcast_audit(session)
 
