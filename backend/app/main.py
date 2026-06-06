@@ -1,15 +1,28 @@
-"""FastAPI entrypoint — skeleton.
+"""FastAPI entrypoint — techbold AI Service Desk Autopilot."""
 
-This is intentionally minimal. Build your own API here for the frontend to call,
-and consume the Phoenix ERP mock from your backend (see docs/phoenix-openapi.yaml).
-Keep the ERP token and the SSH key on the backend — never in the browser.
-"""
+from contextlib import asynccontextmanager
+
+import anthropic
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="techbold AI Service Desk Autopilot — Team Backend")
+from .config import settings
+from .api import routes_agent, routes_sessions, routes_tickets
+from .api import websocket as ws_module
 
-# Open CORS for local dev so your React app can call this backend.
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.anthropic_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    yield
+    await app.state.anthropic_client.close()
+
+
+app = FastAPI(
+    title="techbold AI Service Desk Autopilot",
+    lifespan=lifespan,
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,15 +30,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(routes_tickets.router, prefix="/api")
+app.include_router(routes_sessions.router, prefix="/api")
+app.include_router(routes_agent.router, prefix="/api")
+app.include_router(ws_module.router)
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-
-# TODO: add your routes. A typical shape (yours may differ):
-#   GET  /api/tickets              -> list tickets (via your Phoenix client)
-#   GET  /api/tickets/{id}         -> ticket + customer system
-#   POST /api/runs                 -> start an agent troubleshooting run
-#   POST /api/runs/{id}/approve    -> run the approved command over SSH
-#   POST /api/runs/{id}/activity   -> submit the activity to the ERP
