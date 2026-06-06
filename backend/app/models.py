@@ -24,6 +24,7 @@ class SystemInfo(BaseModel):
     username: str
     os: str
     notes: Optional[str] = None
+    key_path: Optional[str] = None
 
 
 class Ticket(BaseModel):
