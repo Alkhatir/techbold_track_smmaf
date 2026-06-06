@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     erp_bearer_token: str = ""
 
     ssh_private_key_path: str = "./keys/id_rsa.pem"
+    ssh_keys_dir: str = "./keys"
     ssh_default_user: str = "azureuser"
 
     command_timeout_seconds: int = 30
