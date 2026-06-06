@@ -59,7 +59,13 @@ Start with broad evidence gathering. Suggested baseline:
   ss -tlnp
   ps aux --sort=-%cpu | head -10
 
-Then propose targeted checks based on what the ticket suggests.
+Then propose targeted checks based on what the ticket suggests:
+
+- Service not reachable / intermittent → check systemctl status, journalctl for the service, ss -tlnp for the port, curl to the health endpoint
+- Permission denied on uploads/writes → ls -la and stat on the target path, namei -l to trace the full path, id of the process owner
+- Cannot reach external/partner service → check /etc/hosts, /etc/resolv.conf, resolvectl status, dig/nslookup/ping for the hostname, curl to the URL
+- Database reads work but writes fail → check PostgreSQL with sudo -u postgres psql to inspect table grants (\\dp) and roles (\\du)
+- Monitoring data stops → check the metrics agent service status, its logs, and connectivity to the monitoring backend
 
 Return:
 - ticket_summary: brief summary of what the customer reported
