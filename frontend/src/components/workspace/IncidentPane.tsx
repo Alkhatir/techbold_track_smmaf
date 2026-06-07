@@ -3,6 +3,7 @@ import { Cpu, Globe, Send, Server } from "lucide-react";
 import type { AgentItem, SshStatus, Ticket } from "@/lib/workspace/types";
 import { ActionCard } from "./ActionCard";
 import { AnalysisCard } from "./AnalysisCard";
+import { Markdown } from "./Markdown";
 import { Terminal } from "./Terminal";
 import { TicketInfo } from "./TicketInfo";
 
@@ -124,9 +125,9 @@ export function IncidentPane({
                       <div className="flex size-6 shrink-0 items-center justify-center border border-info/40 bg-info/10 font-mono text-[10px] text-info">
                         AI
                       </div>
-                      <div className="flex-1 border-l border-border pl-3 text-sm leading-relaxed text-foreground/90">
+                      <Markdown className="flex-1 border-l border-border pl-3 text-sm leading-relaxed text-foreground/90">
                         {item.text}
-                      </div>
+                      </Markdown>
                     </div>
                   ) : item.kind === "technician_message" ? (
                     <div key={item.id} className="flex gap-3 justify-end">

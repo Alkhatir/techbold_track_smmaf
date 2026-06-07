@@ -14,6 +14,7 @@ import {
 import type { AgentAction } from "@/lib/workspace/types";
 import { checkGuardrail } from "@/lib/workspace/guardrails";
 import { GuardrailBadge } from "./GuardrailBadge";
+import { Markdown } from "./Markdown";
 
 export function ActionCard({
   action,
@@ -152,26 +153,26 @@ export function ActionCard({
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             What &amp; why
           </div>
-          <p className="mt-0.5 text-foreground/90">{action.explanation}</p>
+          <Markdown className="mt-0.5 text-foreground/90">{action.explanation}</Markdown>
         </div>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Expected outcome
           </div>
-          <p className="mt-0.5 text-foreground/90">{action.expected}</p>
+          <Markdown className="mt-0.5 text-foreground/90">{action.expected}</Markdown>
         </div>
         {action.verify_text && (
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Verify
             </div>
-            <p
+            <Markdown
               className={`mt-0.5 ${
                 action.status === "verified_regressed" ? "text-danger" : "text-success"
               }`}
             >
               {action.verify_text}
-            </p>
+            </Markdown>
           </div>
         )}
       </div>

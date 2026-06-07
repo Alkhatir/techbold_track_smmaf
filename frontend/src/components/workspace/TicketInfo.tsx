@@ -10,6 +10,7 @@ import {
   User,
 } from "lucide-react";
 import type { Priority, Ticket } from "@/lib/workspace/types";
+import { Markdown } from "./Markdown";
 
 const priorityCls: Record<Priority, string> = {
   low: "bg-muted text-muted-foreground border-border",
@@ -62,7 +63,7 @@ export function TicketInfo({ ticket }: { ticket: Ticket }) {
           </dl>
           <div className="border-t border-border px-3 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Description</div>
-            <p className="mt-1 text-sm leading-relaxed text-foreground/90">{ticket.description}</p>
+            <Markdown className="mt-1 text-sm leading-relaxed text-foreground/90">{ticket.description}</Markdown>
             <p className="mt-1.5 text-[10px] italic text-muted-foreground">
               Customer-reported symptom only — the actual root cause is determined during diagnosis.
             </p>
@@ -70,7 +71,7 @@ export function TicketInfo({ ticket }: { ticket: Ticket }) {
           {ticket.notes && (
             <div className="border-t border-border px-3 py-3">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Notes</div>
-              <p className="mt-1 text-sm leading-relaxed text-foreground/90">{ticket.notes}</p>
+              <Markdown className="mt-1 text-sm leading-relaxed text-foreground/90">{ticket.notes}</Markdown>
             </div>
           )}
         </section>
@@ -88,7 +89,7 @@ export function TicketInfo({ ticket }: { ticket: Ticket }) {
           {sys.notes && (
             <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
               <span className="text-[10px] font-semibold uppercase tracking-wider">Notes</span>
-              <p className="mt-0.5 text-foreground/90">{sys.notes}</p>
+              <Markdown className="mt-0.5 text-foreground/90">{sys.notes}</Markdown>
             </div>
           )}
         </section>
