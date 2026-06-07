@@ -19,6 +19,7 @@ from .prompts import (
     SYSTEM_PROMPT,
     build_activity_prompt,
     build_analysis_prompt,
+    build_chat_prompt,
     build_fix_prompt,
 )
 from .schemas import ACTIVITY_TOOL, ANALYSIS_TOOL, FIX_PLAN_TOOL
@@ -168,6 +169,33 @@ class SupervisorAgent:
         )
 
         return fix_plan, all_proposed
+
+    async def chat(self, session: TicketSession, message: str) -> str:
+        if not session.ticket or not session.customer_system:
+            raise ValueError("Session must have ticket and customer_system loaded")
+
+        from ..config import settings
+
+        prompt = build_chat_prompt(
+            ticket=session.ticket,
+            customer_system=session.customer_system,
+            command_results=self._format_command_results(session),
+            audit_summary=self._audit.summary(session.id),
+            technician_message=message,
+        )
+
+        response = await self._client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        for block in response.content:
+            if hasattr(block, "text"):
+                return block.text
+
+        return "No response from agent."
 
     async def generate_activity(self, session: TicketSession) -> ActivityDraft:
         if not session.ticket:

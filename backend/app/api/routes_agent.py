@@ -1,7 +1,8 @@
-"""Agent control routes: analyze, propose-fix, generate-activity, submit-activity."""
+"""Agent control routes: analyze, propose-fix, generate-activity, submit-activity, chat."""
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from ..agent.supervisor import SupervisorAgent
 from ..audit.log import audit_logger
@@ -228,3 +229,41 @@ async def submit_activity(session_id: str):
     )
 
     return {"status": "submitted", "activity": activity}
+
+
+# ---------------------------------------------------------------------------
+# POST /api/sessions/{session_id}/chat
+# ---------------------------------------------------------------------------
+
+class ChatRequest(BaseModel):
+    message: str
+
+
+@router.post("/sessions/{session_id}/chat")
+async def chat(session_id: str, body: ChatRequest, request: Request):
+    session = sessions.get(session_id)
+    if not session:
+        return _not_found(session_id)
+
+    if not body.message.strip():
+        return _err("EMPTY_MESSAGE", "Message cannot be empty.")
+
+    client = get_anthropic_client(request)
+    agent = SupervisorAgent(client=client, audit_logger=audit_logger)
+
+    audit_logger.add_event(
+        str(session.ticket_id), session_id, "technician", "chat_message",
+        f"Technician asked: {body.message[:120]}",
+    )
+
+    try:
+        reply = await agent.chat(session, body.message)
+    except Exception as e:
+        return _err("AGENT_ERROR", "Agent failed to respond.", 500, str(e))
+
+    audit_logger.add_event(
+        str(session.ticket_id), session_id, "agent", "chat_reply",
+        f"Agent replied: {reply[:120]}",
+    )
+
+    return {"message": reply}

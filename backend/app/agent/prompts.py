@@ -108,6 +108,39 @@ Notes: {customer_system.system.notes or "none"}
 """
 
 
+def build_chat_prompt(
+    ticket: Ticket,
+    customer_system: CustomerSystem,
+    command_results: str,
+    audit_summary: str,
+    technician_message: str,
+) -> str:
+    if len(command_results) > 3000:
+        command_results = command_results[:3000] + "\n[TRUNCATED]"
+    return f"""\
+The technician has a question or instruction. Answer concisely and stay in the context of the active session.
+
+## Ticket
+ID: {ticket.id}
+Title: {ticket.title}
+Description: {ticket.description}
+Customer: {ticket.customer_name}
+
+## System
+OS: {customer_system.system.os}
+Notes: {customer_system.system.notes or "none"}
+
+## Audit so far
+{audit_summary or "No actions taken yet."}
+
+## Command results so far
+{command_results or "No commands run yet."}
+
+## Technician message
+{technician_message}
+"""
+
+
 def build_activity_prompt(
     ticket: Ticket,
     audit_events: str,
