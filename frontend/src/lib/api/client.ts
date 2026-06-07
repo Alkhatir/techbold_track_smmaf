@@ -4,6 +4,14 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http:
 
 // ─── backend wire types ────────────────────────────────────────────────────
 
+export interface BackendEmployee {
+  id: number;
+  firstname: string;
+  lastname: string;
+  username: string;
+  teamname: string;
+}
+
 export interface BackendTicket {
   id: number;
   title: string;
@@ -258,6 +266,10 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 // ─── API wrappers ─────────────────────────────────────────────────────────────
 
 export const api = {
+  me: {
+    get: () => apiFetch<BackendEmployee>("/me"),
+  },
+
   tickets: {
     list: (params?: { status?: string; priority?: string; sort?: string }) => {
       const q = new URLSearchParams();

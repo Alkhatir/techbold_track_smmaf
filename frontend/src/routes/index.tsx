@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
 import { TopBar } from "@/components/workspace/TopBar";
 import { TicketQueue, type SortKey } from "@/components/workspace/TicketQueue";
 import { IncidentPane } from "@/components/workspace/IncidentPane";
@@ -70,6 +71,19 @@ const makeLog = (e: Omit<LogEntry, "id" | "at">): LogEntry => ({
 });
 
 function Index() {
+  const { technician, isAuthenticated, loading: authLoading, logout } = useAuth();
+  const navigate = useNavigate();
+
+  // Gate the workspace behind a (one-button) login.
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) void navigate({ to: "/login" });
+  }, [authLoading, isAuthenticated, navigate]);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    void navigate({ to: "/login" });
+  }, [logout, navigate]);
+
   const [tickets, setTickets] = useState<Ticket[]>(INITIAL_TICKETS);
   const [loadState, setLoadState] = useState<QueueLoadState>("loading");
   const [sortKey, setSortKey] = useState<SortKey>("date");
@@ -134,8 +148,9 @@ function Index() {
     };
   }, []);
 
-  // ─── load tickets from backend on mount ───────────────────────────────────
+  // ─── load tickets from backend once authenticated ─────────────────────────
   useEffect(() => {
+    if (!isAuthenticated) return;
     setLoadState("loading");
     api.tickets
       .list()
@@ -163,7 +178,7 @@ function Index() {
           setLoadState("ok");
         }
       });
-  }, []);
+  }, [isAuthenticated]);
 
   // ─── WebSocket event handlers (updated via ref so they always see fresh state) ─
   useEffect(() => {
@@ -726,9 +741,12 @@ function Index() {
       (i) => i.kind === "action" && (i.status === "succeeded" || i.status === "failed"),
     );
 
+  // While auth is resolving or a redirect to /login is in flight, render nothing.
+  if (authLoading || !isAuthenticated) return null;
+
   return (
     <div className="dark flex h-screen w-full flex-col overflow-hidden bg-background text-foreground">
-      <TopBar technician="m.alvarez" onAbortAll={handleAbortAll} />
+      <TopBar technician={technician} onAbortAll={handleAbortAll} onLogout={handleLogout} />
       <div className="flex min-h-0 flex-1">
         <TicketQueue
           tickets={tickets}

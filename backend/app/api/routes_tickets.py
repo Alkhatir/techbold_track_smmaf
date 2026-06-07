@@ -23,6 +23,15 @@ def _status_for_code(code: str) -> int:
     }.get(code, 502)
 
 
+@router.get("/me")
+async def get_me():
+    erp = get_erp_client()
+    try:
+        return await erp.get_me()
+    except ERPError as e:
+        return _erp_error_response(e)
+
+
 @router.get("/tickets")
 async def list_tickets(
     status: str | None = Query(default=None),
