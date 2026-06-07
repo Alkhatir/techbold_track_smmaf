@@ -16,10 +16,14 @@ export function ActivityLog({
   entries,
   onReview,
   canReview,
+  onProposeFix,
+  generatingActivity,
 }: {
   entries: LogEntry[];
   onReview: () => void;
   canReview: boolean;
+  onProposeFix?: () => void;
+  generatingActivity?: boolean;
 }) {
   return (
     <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card">
@@ -47,14 +51,22 @@ export function ActivityLog({
           </ol>
         )}
       </div>
-      <div className="border-t border-border p-2">
+      <div className="flex flex-col gap-1.5 border-t border-border p-2">
+        {onProposeFix && (
+          <button
+            onClick={onProposeFix}
+            className="flex w-full items-center justify-center gap-1.5 border border-warning/60 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning hover:bg-warning/20"
+          >
+            Propose Fix
+          </button>
+        )}
         <button
           onClick={onReview}
-          disabled={!canReview}
+          disabled={!canReview || generatingActivity}
           className="flex w-full items-center justify-center gap-1.5 border border-info/60 bg-info/10 px-2.5 py-1.5 text-xs font-medium text-info hover:bg-info/20 disabled:opacity-40"
         >
           <ClipboardCheck className="size-3.5" />
-          Review &amp; submit activity
+          {generatingActivity ? "Generating…" : "Review & submit activity"}
         </button>
       </div>
     </aside>

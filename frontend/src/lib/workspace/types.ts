@@ -41,6 +41,13 @@ export interface AgentMessage {
   at: number;
 }
 
+export interface TechnicianMessage {
+  id: string;
+  kind: "technician_message";
+  text: string;
+  at: number;
+}
+
 export interface Guardrail {
   level: GuardrailLevel;
   reason?: string;
@@ -69,10 +76,11 @@ export interface AgentAction {
   status: ActionStatus;
   output: string[];
   verify_text?: string;
+  breakpoint?: boolean;
   at: number;
 }
 
-export type AgentItem = AgentMessage | AgentAction;
+export type AgentItem = AgentMessage | TechnicianMessage | AgentAction;
 
 export interface LogEntry {
   id: string;

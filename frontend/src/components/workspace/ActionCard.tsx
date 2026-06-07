@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   AlertTriangle,
   Check,
+  Flag,
   Pencil,
   RotateCcw,
   Square,
@@ -19,6 +20,7 @@ export function ActionCard({
   onEdit,
   onRetry,
   onAbort,
+  onToggleBreakpoint,
 }: {
   action: AgentAction;
   onApprove: (overrideBlocked: boolean) => void;
@@ -26,6 +28,7 @@ export function ActionCard({
   onEdit: (newCommand: string) => void;
   onRetry: () => void;
   onAbort: () => void;
+  onToggleBreakpoint?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(action.command);
@@ -63,7 +66,13 @@ export function ActionCard({
   };
 
   return (
-    <div className="border border-border bg-card">
+    <div className={`border bg-card ${action.breakpoint ? "border-amber-500/60" : "border-border"}`}>
+      {action.breakpoint && (
+        <div className="flex items-center gap-1.5 border-b border-amber-500/40 bg-amber-500/10 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-amber-400">
+          <Flag className="size-3" />
+          Breakpoint — execution will pause here
+        </div>
+      )}
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -76,7 +85,22 @@ export function ActionCard({
             </span>
           )}
         </div>
-        <StatusPill status={action.status} />
+        <div className="flex items-center gap-2">
+          {onToggleBreakpoint && (
+            <button
+              onClick={onToggleBreakpoint}
+              title={action.breakpoint ? "Remove breakpoint" : "Set breakpoint"}
+              className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] transition ${
+                action.breakpoint
+                  ? "text-amber-400 hover:text-amber-300"
+                  : "text-muted-foreground/50 hover:text-amber-400"
+              }`}
+            >
+              <Flag className="size-3" />
+            </button>
+          )}
+          <StatusPill status={action.status} />
+        </div>
       </div>
 
       {blocked && pending && (

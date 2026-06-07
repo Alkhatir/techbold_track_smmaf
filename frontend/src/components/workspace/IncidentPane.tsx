@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Cpu, Globe, Server } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Cpu, Globe, Send, Server } from "lucide-react";
 import type { AgentItem, SshStatus, Ticket } from "@/lib/workspace/types";
 import { ActionCard } from "./ActionCard";
 import { Terminal } from "./Terminal";
@@ -21,6 +21,8 @@ export function IncidentPane({
   onEdit,
   onRetry,
   onAbort,
+  onToggleBreakpoint,
+  onSendChat,
 }: {
   ticket: Ticket | null;
   items: AgentItem[];
@@ -31,8 +33,29 @@ export function IncidentPane({
   onEdit: (id: string, newCommand: string) => void;
   onRetry: (id: string) => void;
   onAbort: (id: string) => void;
+  onToggleBreakpoint?: (id: string) => void;
+  onSendChat?: (message: string) => void;
 }) {
   const [tab, setTab] = useState<"diagnosis" | "terminal" | "info">("diagnosis");
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const feedEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [items]);
+
+  const handleSendChat = async () => {
+    const text = chatDraft.trim();
+    if (!text || chatSending) return;
+    setChatDraft("");
+    setChatSending(true);
+    try {
+      await Promise.resolve(onSendChat?.(text));
+    } finally {
+      setChatSending(false);
+    }
+  };
 
   if (!ticket) {
     return (
@@ -42,7 +65,7 @@ export function IncidentPane({
     );
   }
 
-  const sys = ticket.system;
+  const sys = ticket.system ?? { ip: "—", port: 22, username: "—", os: "—" };
   const hostLabel = `host-${ticket.id}`;
   const awaiting = items.some((i) => i.kind === "action" && i.status === "proposed");
 
@@ -78,37 +101,73 @@ export function IncidentPane({
         )}
       </div>
 
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 flex flex-col">
         {tab === "diagnosis" ? (
-          <div className="h-full overflow-y-auto px-4 py-4">
-            <div className="mx-auto flex max-w-3xl flex-col gap-3">
-              {items.length === 0 && (
-                <div className="text-xs text-muted-foreground">Agent idle.</div>
-              )}
-              {items.map((item) =>
-                item.kind === "message" ? (
-                  <div key={item.id} className="flex gap-3">
-                    <div className="flex size-6 shrink-0 items-center justify-center border border-info/40 bg-info/10 font-mono text-[10px] text-info">
-                      AI
+          <>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <div className="mx-auto flex max-w-3xl flex-col gap-3">
+                {items.length === 0 && (
+                  <div className="text-xs text-muted-foreground">Agent idle.</div>
+                )}
+                {items.map((item) =>
+                  item.kind === "message" ? (
+                    <div key={item.id} className="flex gap-3">
+                      <div className="flex size-6 shrink-0 items-center justify-center border border-info/40 bg-info/10 font-mono text-[10px] text-info">
+                        AI
+                      </div>
+                      <div className="flex-1 border-l border-border pl-3 text-sm leading-relaxed text-foreground/90">
+                        {item.text}
+                      </div>
                     </div>
-                    <div className="flex-1 border-l border-border pl-3 text-sm leading-relaxed text-foreground/90">
-                      {item.text}
+                  ) : item.kind === "technician_message" ? (
+                    <div key={item.id} className="flex gap-3 justify-end">
+                      <div className="max-w-[75%] border-r border-info/30 pr-3 text-sm leading-relaxed text-foreground/70 italic text-right">
+                        {item.text}
+                      </div>
+                      <div className="flex size-6 shrink-0 items-center justify-center border border-info/30 bg-info/5 font-mono text-[10px] text-info/70">
+                        TC
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <ActionCard
-                    key={item.id}
-                    action={item}
-                    onApprove={(override) => onApprove(item.id, override)}
-                    onReject={() => onReject(item.id)}
-                    onEdit={(cmd) => onEdit(item.id, cmd)}
-                    onRetry={() => onRetry(item.id)}
-                    onAbort={() => onAbort(item.id)}
-                  />
-                ),
-              )}
+                  ) : (
+                    <ActionCard
+                      key={item.id}
+                      action={item}
+                      onApprove={(override) => onApprove(item.id, override)}
+                      onReject={() => onReject(item.id)}
+                      onEdit={(cmd) => onEdit(item.id, cmd)}
+                      onRetry={() => onRetry(item.id)}
+                      onAbort={() => onAbort(item.id)}
+                      onToggleBreakpoint={onToggleBreakpoint ? () => onToggleBreakpoint(item.id) : undefined}
+                    />
+                  ),
+                )}
+                <div ref={feedEndRef} />
+              </div>
             </div>
-          </div>
+            {onSendChat && (
+              <div className="shrink-0 border-t border-border bg-card px-4 py-2.5">
+                <div className="mx-auto flex max-w-3xl items-center gap-2">
+                  <input
+                    type="text"
+                    value={chatDraft}
+                    onChange={(e) => setChatDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSendChat(); } }}
+                    placeholder="Ask the agent…"
+                    disabled={chatSending}
+                    className="flex-1 bg-background border border-border px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-info/60 disabled:opacity-50"
+                  />
+                  <button
+                    onClick={() => void handleSendChat()}
+                    disabled={!chatDraft.trim() || chatSending}
+                    className="flex items-center gap-1.5 border border-info/60 bg-info/10 px-3 py-1.5 text-xs font-medium text-info hover:bg-info/20 disabled:opacity-40"
+                  >
+                    <Send className="size-3.5" />
+                    {chatSending ? "Sending…" : "Send"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         ) : tab === "terminal" ? (
           <Terminal lines={terminalLines} host={hostLabel} />
         ) : (

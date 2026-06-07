@@ -40,14 +40,14 @@ export function ActivitySubmitModal({
         onChange={(e) => set(field, e.target.value as ActivityDraft[typeof field])}
         rows={rows}
         placeholder={placeholder}
-        className="block w-full resize-y border border-border bg-background px-2 py-1.5 font-mono text-[12px] leading-relaxed text-foreground focus:outline-none focus:ring-1 focus:ring-info"
+        className="block w-full resize-y border border-border bg-background px-2 py-2 font-mono text-[13px] leading-relaxed text-foreground focus:outline-none focus:ring-1 focus:ring-info"
       />
     </label>
   );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col border border-border bg-card shadow-xl">
+      <div className="flex max-h-[94vh] w-full max-w-5xl flex-col border border-border bg-card shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -78,11 +78,11 @@ export function ActivitySubmitModal({
               <div>end:&nbsp;&nbsp;{d.end_datetime}</div>
             </div>
           </div>
-          <div className="sm:col-span-2"><Field label="Summary (one sentence — what was restored)" field="summary" rows={2} placeholder="Restored …" /></div>
-          <div className="sm:col-span-2"><Field label="Root cause (technical — not the symptom)" field="root_cause" rows={2} /></div>
-          <div className="sm:col-span-2"><Field label="Actions taken (diagnosis + fix, in order)" field="actions_taken" rows={4} /></div>
-          <div className="sm:col-span-2"><Field label="Commands summary (no secrets in output)" field="commands_summary" rows={3} /></div>
-          <div className="sm:col-span-2"><Field label="Validation result (concrete proof the service works)" field="validation_result" rows={2} /></div>
+          <div className="sm:col-span-2"><Field label="Summary (one sentence — what was restored)" field="summary" rows={3} placeholder="Restored …" /></div>
+          <div className="sm:col-span-2"><Field label="Root cause (technical — not the symptom)" field="root_cause" rows={3} /></div>
+          <div className="sm:col-span-2"><Field label="Actions taken (diagnosis + fix, in order)" field="actions_taken" rows={7} /></div>
+          <div className="sm:col-span-2"><Field label="Commands summary (no secrets in output)" field="commands_summary" rows={6} /></div>
+          <div className="sm:col-span-2"><Field label="Validation result (concrete proof the service works)" field="validation_result" rows={3} /></div>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5">
