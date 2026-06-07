@@ -48,6 +48,28 @@ export interface TechnicianMessage {
   at: number;
 }
 
+// A single hypothesis the agent is weighing during initial analysis.
+export interface AnalysisHypothesis {
+  title: string;
+  description: string;
+  confidence?: string;
+  supporting_evidence?: string[];
+  next_check?: string;
+}
+
+// The agent's initial, background analysis of the incident and environment,
+// shown in the diagnosis feed before any command is proposed. While `pending`
+// is true the agent is still working; the structured fields fill in on arrival.
+export interface AgentAnalysisItem {
+  id: string;
+  kind: "analysis";
+  pending: boolean;
+  ticket_summary?: string;
+  affected_component?: string;
+  hypotheses: AnalysisHypothesis[];
+  at: number;
+}
+
 export interface Guardrail {
   level: GuardrailLevel;
   reason?: string;
@@ -80,7 +102,7 @@ export interface AgentAction {
   at: number;
 }
 
-export type AgentItem = AgentMessage | TechnicianMessage | AgentAction;
+export type AgentItem = AgentMessage | TechnicianMessage | AgentAction | AgentAnalysisItem;
 
 export interface LogEntry {
   id: string;

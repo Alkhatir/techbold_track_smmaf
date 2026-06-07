@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Cpu, Globe, Send, Server } from "lucide-react";
 import type { AgentItem, SshStatus, Ticket } from "@/lib/workspace/types";
 import { ActionCard } from "./ActionCard";
+import { AnalysisCard } from "./AnalysisCard";
 import { Terminal } from "./Terminal";
 import { TicketInfo } from "./TicketInfo";
 
@@ -110,7 +111,9 @@ export function IncidentPane({
                   <div className="text-xs text-muted-foreground">Agent idle.</div>
                 )}
                 {items.map((item) =>
-                  item.kind === "message" ? (
+                  item.kind === "analysis" ? (
+                    <AnalysisCard key={item.id} analysis={item} />
+                  ) : item.kind === "message" ? (
                     <div key={item.id} className="flex gap-3">
                       <div className="flex size-6 shrink-0 items-center justify-center border border-info/40 bg-info/10 font-mono text-[10px] text-info">
                         AI

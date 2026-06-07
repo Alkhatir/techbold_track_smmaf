@@ -1,5 +1,5 @@
 import { checkGuardrail } from "./guardrails";
-import type { AgentItem, Ticket } from "./types";
+import type { AgentAnalysisItem, AgentItem, Ticket } from "./types";
 
 // Five hidden incidents per the brief: stopped service, full disk on /var,
 // broken config, failed cron, port conflict. Plus one resolved ticket.
@@ -152,6 +152,106 @@ function action(partial: {
 }
 function msg(text: string): AgentItem {
   return { id: nid("m"), kind: "message", text, at: Date.now() };
+}
+
+// The agent's initial background analysis of the incident + environment, shown
+// in the diagnosis feed before any command is proposed (demo / offline mode).
+export function buildAnalysis(ticketId: number): AgentAnalysisItem {
+  const base = { id: nid("an"), kind: "analysis" as const, pending: false, at: Date.now() };
+  switch (ticketId) {
+    case 4821:
+      return {
+        ...base,
+        ticket_summary:
+          "api.northwind.io returns connection-refused since ~08:00. No deploys reported, so the web tier likely stopped rather than misconfigured.",
+        affected_component: "nginx.service",
+        hypotheses: [
+          {
+            title: "nginx service stopped",
+            description: "The listener is down, which fully explains connection-refused on :443.",
+            confidence: "high",
+            supporting_evidence: ["Connection refused, not a 5xx", "No upstream/app errors reported"],
+            next_check: "systemctl is-active nginx; recent journal entries",
+          },
+          {
+            title: "Bad config blocking start",
+            description: "A failed reload could leave the unit dead if the config no longer parses.",
+            confidence: "low",
+            next_check: "nginx -t output in the journal",
+          },
+        ],
+      };
+    case 4822:
+      return {
+        ...base,
+        ticket_summary:
+          "Encoder jobs failing to write output. Symptoms point at the storage layer rather than the encoder itself.",
+        affected_component: "/var filesystem",
+        hypotheses: [
+          {
+            title: "/var partition full",
+            description: "Write failures across a host almost always trace back to a full filesystem.",
+            confidence: "high",
+            supporting_evidence: ["Write errors, not permission errors", "Multiple services affected"],
+            next_check: "df -h and largest consumers under /var",
+          },
+        ],
+      };
+    case 4823:
+      return {
+        ...base,
+        ticket_summary:
+          "deploy@ci-runner-02 SSH logins refused after last night's hardening run. Key auth, not password, is failing.",
+        affected_component: "sshd / authorized_keys",
+        hypotheses: [
+          {
+            title: "Wrong mode on authorized_keys",
+            description: "sshd silently refuses keys when the file is group/world-writable.",
+            confidence: "high",
+            supporting_evidence: ["Hardening playbook ran overnight", "Only key auth affected"],
+            next_check: "auth.log for 'bad ownership or modes'",
+          },
+        ],
+      };
+    case 4824:
+      return {
+        ...base,
+        ticket_summary:
+          "Nightly batch stopped running. cron daemon appears healthy, so the job — not the service — is likely at fault.",
+        affected_component: "batch user crontab",
+        hypotheses: [
+          {
+            title: "Malformed crontab line",
+            description: "A parse error after the last edit would stop the job from ever firing.",
+            confidence: "medium",
+            supporting_evidence: ["cron is active", "No CRON entries in syslog since Tuesday"],
+            next_check: "crontab -l for the batch user",
+          },
+        ],
+      };
+    case 4825:
+      return {
+        ...base,
+        ticket_summary:
+          "app.service won't start after reboot. Looks like the port it binds is already taken.",
+        affected_component: "app.service / port 8080",
+        hypotheses: [
+          {
+            title: "Port 8080 held by a stray process",
+            description: "A leftover process binding :8080 blocks the app from starting.",
+            confidence: "high",
+            supporting_evidence: ["'address already in use' in the journal"],
+            next_check: "ss -tlnp for the owner of :8080",
+          },
+        ],
+      };
+    default:
+      return {
+        ...base,
+        ticket_summary: "Ticket already resolved — no further analysis required.",
+        hypotheses: [],
+      };
+  }
 }
 
 export function buildAgentScript(ticketId: number): AgentItem[] {

@@ -9,6 +9,7 @@ import { ActivitySubmitModal } from "@/components/workspace/ActivitySubmitModal"
 import {
   TICKETS as INITIAL_TICKETS,
   buildAgentScript,
+  buildAnalysis,
   buildFollowupSafer,
   simulatedOutput,
   verifyText,
@@ -16,7 +17,7 @@ import {
 import { checkGuardrail, maskSecrets } from "@/lib/workspace/guardrails";
 import {
   api,
-  analysisToItems,
+  analysisToItem,
   auditEventToLogEntry,
   commandResultToLines,
   connectSessionWs,
@@ -130,6 +131,20 @@ function Index() {
 
   const appendItems = useCallback((ticketId: number, items: AgentItem[]) => {
     setItemsByTicket((prev) => ({ ...prev, [ticketId]: [...(prev[ticketId] ?? []), ...items] }));
+  }, []);
+
+  const replaceItem = useCallback((ticketId: number, itemId: string, next: AgentItem) => {
+    setItemsByTicket((prev) => ({
+      ...prev,
+      [ticketId]: (prev[ticketId] ?? []).map((it) => (it.id === itemId ? next : it)),
+    }));
+  }, []);
+
+  const removeItem = useCallback((ticketId: number, itemId: string) => {
+    setItemsByTicket((prev) => ({
+      ...prev,
+      [ticketId]: (prev[ticketId] ?? []).filter((it) => it.id !== itemId),
+    }));
   }, []);
 
   const schedule = (fn: () => void, ms: number) => {
@@ -291,13 +306,22 @@ function Index() {
       text: `SSH connected as ${sys?.username ?? "—"}@${ticket.customer_name}`,
     });
 
-    // Kick off agent analysis
+    // Kick off agent analysis. Show a live "analyzing" card immediately so the
+    // technician can see the agent working in the background before any command.
     pushLog({ ticket_id: id, level: "info", text: "Starting AI analysis…" });
-    const { analysis, pending_commands } = await api.agent.analyze(sessionId);
+    const analyzingId = `analysis-${id}-${Date.now()}`;
+    appendItem(id, { id: analyzingId, kind: "analysis", pending: true, hypotheses: [], at: Date.now() });
 
-    // Show analysis narrative
-    const msgs = analysisToItems(analysis);
-    appendItems(id, msgs);
+    let analysis, pending_commands;
+    try {
+      ({ analysis, pending_commands } = await api.agent.analyze(sessionId));
+    } catch (err) {
+      removeItem(id, analyzingId);
+      throw err;
+    }
+
+    // Replace the placeholder with the structured initial analysis
+    replaceItem(id, analyzingId, analysisToItem(analysis, analyzingId));
 
     // Show proposed commands
     if (pending_commands.length > 0) {
@@ -352,6 +376,18 @@ function Index() {
       });
     }, 900);
 
+    // Show the agent "analyzing" in the background, then reveal its findings —
+    // before any command is proposed.
+    const analyzingId = `analysis-${id}-${Date.now()}`;
+    schedule(() => {
+      appendItem(id, { id: analyzingId, kind: "analysis", pending: true, hypotheses: [], at: Date.now() });
+      pushLog({ ticket_id: id, level: "info", text: "Agent analyzing the problem and environment…" });
+    }, 1100);
+    schedule(() => {
+      replaceItem(id, analyzingId, buildAnalysis(id));
+      pushLog({ ticket_id: id, level: "info", text: "Initial analysis ready" });
+    }, 2600);
+
     const script = buildAgentScript(id);
     script.forEach((item, idx) => {
       schedule(() => {
@@ -375,7 +411,7 @@ function Index() {
           });
           pushLog({ ticket_id: id, level: "info", text: "Agent paused — awaiting human approval" });
         }
-      }, 1400 + idx * 1100);
+      }, 3200 + idx * 1100);
     });
   };
 
@@ -824,15 +860,28 @@ function buildDraft(
       a.status === "succeeded" || a.status === "verified_ok" || a.status === "verified_regressed",
   );
   const messages = items.filter((i) => i.kind === "message").map((m) => (m as { text: string }).text);
+  const analysisTexts = items
+    .filter((i): i is Extract<AgentItem, { kind: "analysis" }> => i.kind === "analysis")
+    .flatMap((a) => [
+      a.ticket_summary,
+      ...a.hypotheses.map((h) => `${h.title}: ${h.description}`),
+    ])
+    .filter((t): t is string => Boolean(t));
 
   const rootCauseGuess =
-    messages.find((t) => /port|conflict|disk|cron|config|permission|inactive|exited/i.test(t)) ??
-    "Diagnosed via agent reasoning; see actions taken.";
+    [...analysisTexts, ...messages].find((t) =>
+      /port|conflict|disk|cron|config|permission|inactive|exited/i.test(t),
+    ) ?? "Diagnosed via agent reasoning; see actions taken.";
 
   const stepsTaken: string[] = [];
   let n = 1;
   for (const item of items) {
-    if (item.kind === "message") {
+    if (item.kind === "analysis") {
+      if (item.ticket_summary) stepsTaken.push(`${n++}. Initial analysis: ${item.ticket_summary}`);
+      for (const h of item.hypotheses) {
+        stepsTaken.push(`${n++}. Hypothesis: ${h.title} — ${h.description}`);
+      }
+    } else if (item.kind === "message") {
       stepsTaken.push(`${n++}. Diagnosis: ${item.text}`);
     } else if (
       item.status === "succeeded" ||

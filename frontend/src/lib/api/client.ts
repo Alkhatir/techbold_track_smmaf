@@ -1,4 +1,10 @@
-import type { AgentAction, AgentItem, Guardrail, LogEntry } from "@/lib/workspace/types";
+import type {
+  AgentAction,
+  AgentAnalysisItem,
+  AgentItem,
+  Guardrail,
+  LogEntry,
+} from "@/lib/workspace/types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://localhost:8000";
 
@@ -189,26 +195,27 @@ export function proposedCommandToAction(cmd: BackendProposedCommand): AgentActio
   };
 }
 
-export function analysisToItems(analysis: BackendAgentAnalysis): AgentItem[] {
-  const items: AgentItem[] = [];
-  let seq = Date.now();
-
-  if (analysis.ticket_summary) {
-    items.push({ id: `m-sum-${seq++}`, kind: "message", text: analysis.ticket_summary, at: seq });
-  }
-
-  for (const h of analysis.hypotheses) {
-    const conf = h.confidence ? `[${h.confidence}] ` : "";
-    const next = h.next_check ? ` → ${h.next_check}` : "";
-    items.push({
-      id: `m-hyp-${seq++}`,
-      kind: "message",
-      text: `${conf}${h.title}: ${h.description}${next}`,
-      at: seq,
-    });
-  }
-
-  return items;
+// Convert the backend analysis into a single structured "analysis" feed item.
+// `id` lets callers replace an in-flight (pending) placeholder in place.
+export function analysisToItem(
+  analysis: BackendAgentAnalysis,
+  id = `analysis-${Date.now()}`,
+): AgentAnalysisItem {
+  return {
+    id,
+    kind: "analysis",
+    pending: false,
+    ticket_summary: analysis.ticket_summary || undefined,
+    affected_component: analysis.affected_component || undefined,
+    hypotheses: analysis.hypotheses.map((h) => ({
+      title: h.title,
+      description: h.description,
+      confidence: h.confidence || undefined,
+      supporting_evidence: h.supporting_evidence?.length ? h.supporting_evidence : undefined,
+      next_check: h.next_check || undefined,
+    })),
+    at: Date.now(),
+  };
 }
 
 export function fixPlanToItems(plan: BackendFixPlan): AgentItem[] {
