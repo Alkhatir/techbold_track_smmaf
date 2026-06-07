@@ -1,5 +1,6 @@
 import { Loader2, Microscope, Search } from "lucide-react";
 import type { AgentAnalysisItem, AnalysisHypothesis } from "@/lib/workspace/types";
+import { Markdown } from "./Markdown";
 
 // Visually distinct card for the agent's initial, background analysis of the
 // incident and environment — shown before any command is proposed. The violet
@@ -34,7 +35,7 @@ export function AnalysisCard({ analysis }: { analysis: AgentAnalysisItem }) {
       ) : (
         <div className="space-y-3 px-3 py-3 text-xs leading-relaxed">
           {ticket_summary && (
-            <p className="text-sm leading-relaxed text-foreground/90">{ticket_summary}</p>
+            <Markdown className="text-sm leading-relaxed text-foreground/90">{ticket_summary}</Markdown>
           )}
 
           {affected_component && (
@@ -74,13 +75,13 @@ function HypothesisRow({ hypothesis }: { hypothesis: AnalysisHypothesis }) {
         <span className="text-[13px] font-medium text-foreground/90">{title}</span>
         {confidence && <ConfidenceBadge confidence={confidence} />}
       </div>
-      {description && <p className="mt-0.5 text-foreground/80">{description}</p>}
+      {description && <Markdown className="mt-0.5 text-foreground/80">{description}</Markdown>}
       {supporting_evidence && supporting_evidence.length > 0 && (
         <ul className="mt-1 space-y-0.5">
           {supporting_evidence.map((ev, i) => (
             <li key={i} className="flex gap-1.5 text-[11px] text-muted-foreground">
               <span className="text-violet-400/70">•</span>
-              <span>{ev}</span>
+              <Markdown inline>{ev}</Markdown>
             </li>
           ))}
         </ul>
@@ -88,7 +89,7 @@ function HypothesisRow({ hypothesis }: { hypothesis: AnalysisHypothesis }) {
       {next_check && (
         <div className="mt-1 flex items-center gap-1 text-[11px] text-violet-200/80">
           <Search className="size-3 shrink-0" />
-          <span>Next check: {next_check}</span>
+          <span>Next check: <Markdown inline>{next_check}</Markdown></span>
         </div>
       )}
     </div>

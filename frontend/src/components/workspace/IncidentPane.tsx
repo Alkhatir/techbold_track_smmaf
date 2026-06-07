@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Cpu, Globe, Send, Server } from "lucide-react";
-import type { AgentItem, SshStatus, Ticket } from "@/lib/workspace/types";
+import { Cpu, FastForward, Flag, Globe, Send, Server } from "lucide-react";
+import type { AgentAction, AgentItem, SshStatus, Ticket } from "@/lib/workspace/types";
 import { ActionCard } from "./ActionCard";
 import { AnalysisCard } from "./AnalysisCard";
+import { Markdown } from "./Markdown";
 import { Terminal } from "./Terminal";
 import { TicketInfo } from "./TicketInfo";
 
@@ -23,6 +24,8 @@ export function IncidentPane({
   onRetry,
   onAbort,
   onToggleBreakpoint,
+  onRunAll,
+  runningAll,
   onSendChat,
 }: {
   ticket: Ticket | null;
@@ -35,6 +38,8 @@ export function IncidentPane({
   onRetry: (id: string) => void;
   onAbort: (id: string) => void;
   onToggleBreakpoint?: (id: string) => void;
+  onRunAll?: () => void;
+  runningAll?: boolean;
   onSendChat?: (message: string) => void;
 }) {
   const [tab, setTab] = useState<"diagnosis" | "terminal" | "info">("diagnosis");
@@ -74,7 +79,19 @@ export function IncidentPane({
 
   const sys = ticket.system ?? { ip: "—", port: 22, username: "—", os: "—" };
   const hostLabel = `host-${ticket.id}`;
-  const awaiting = items.some((i) => i.kind === "action" && i.status === "proposed");
+  const proposed = items.filter(
+    (i): i is AgentAction => i.kind === "action" && i.status === "proposed",
+  );
+  const awaiting = proposed.length > 0;
+
+  // How many commands "Run all" would execute before it hits the first
+  // breakpoint (a breakpoint pauses *before* its command, like a debugger).
+  let runnableCount = 0;
+  for (const a of proposed) {
+    if (a.breakpoint) break;
+    runnableCount++;
+  }
+  const breakpointAhead = runnableCount < proposed.length;
 
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-background">
@@ -101,10 +118,33 @@ export function IncidentPane({
         <TabBtn active={tab === "terminal"} onClick={() => setTab("terminal")}>Terminal</TabBtn>
         <TabBtn active={tab === "info"} onClick={() => setTab("info")}>Ticket info</TabBtn>
         {awaiting && (
-          <span className="ml-auto mr-3 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-warning">
-            <span className="size-1.5 animate-pulse rounded-full bg-warning" />
-            agent paused — awaiting approval
-          </span>
+          <div className="ml-auto mr-3 flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-warning">
+              <span className="size-1.5 animate-pulse rounded-full bg-warning" />
+              agent paused — awaiting approval
+            </span>
+            {onRunAll && (
+              <button
+                onClick={onRunAll}
+                disabled={runningAll || runnableCount === 0}
+                title={
+                  runnableCount === 0
+                    ? "The next command has a breakpoint — remove it or approve manually to continue"
+                    : breakpointAhead
+                      ? `Approve & run the next ${runnableCount} command(s), then pause at the breakpoint`
+                      : `Approve & run all ${proposed.length} proposed command(s) in sequence`
+                }
+                className="flex items-center gap-1.5 border border-success/60 bg-success/15 px-2.5 py-1 text-[11px] font-medium text-success hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {breakpointAhead ? <Flag className="size-3.5" /> : <FastForward className="size-3.5" />}
+                {runningAll
+                  ? "Running…"
+                  : breakpointAhead
+                    ? `Run ${runnableCount} to breakpoint`
+                    : `Run all (${proposed.length})`}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -124,9 +164,9 @@ export function IncidentPane({
                       <div className="flex size-6 shrink-0 items-center justify-center border border-info/40 bg-info/10 font-mono text-[10px] text-info">
                         AI
                       </div>
-                      <div className="flex-1 border-l border-border pl-3 text-sm leading-relaxed text-foreground/90">
+                      <Markdown className="flex-1 border-l border-border pl-3 text-sm leading-relaxed text-foreground/90">
                         {item.text}
-                      </div>
+                      </Markdown>
                     </div>
                   ) : item.kind === "technician_message" ? (
                     <div key={item.id} className="flex gap-3 justify-end">

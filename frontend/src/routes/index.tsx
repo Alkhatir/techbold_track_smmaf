@@ -98,11 +98,17 @@ function Index() {
   const [sessionIdByTicket, setSessionIdByTicket] = useState<Record<number, string>>({});
   const [activityDraftByTicket, setActivityDraftByTicket] = useState<Record<number, BackendActivityDraft>>({});
   const [generatingActivity, setGeneratingActivity] = useState(false);
+  const [runningAll, setRunningAll] = useState(false);
 
   // Track whether we're in real-backend mode per ticket
   const backendModeRef = useRef<Record<number, boolean>>({});
   const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const wsRef = useRef<Record<number, WebSocket>>({});
+
+  // Command-result ids already streamed to the terminal. Both the HTTP
+  // approveCommand response and the WebSocket `command_result` broadcast deliver
+  // the same result, so we track ids to keep the output from appearing twice.
+  const streamedResultIdsRef = useRef<Set<string>>(new Set());
 
   // WebSocket handlers stored in a ref so closures in ws.onmessage always call latest version
   const wsHandlersRef = useRef<Record<number, WsHandlers>>({});
@@ -146,6 +152,23 @@ function Index() {
       return { ...prev, [ticketId]: [...existing, ...toAdd] };
     });
   }, []);
+
+  // Append a command result's output to the terminal, skipping it if this result
+  // id was already streamed (e.g. via the other of HTTP response / WebSocket
+  // broadcast). Returns the lines so callers can also attach them to the action.
+  const appendTerminalResult = useCallback(
+    (ticketId: number, result: BackendCommandResult): string[] => {
+      const lines = commandResultToLines(result);
+      if (streamedResultIdsRef.current.has(result.id)) return lines;
+      streamedResultIdsRef.current.add(result.id);
+      setTerminalByTicket((prev) => ({
+        ...prev,
+        [ticketId]: [...(prev[ticketId] ?? []), ...lines],
+      }));
+      return lines;
+    },
+    [],
+  );
 
   const replaceItem = useCallback((ticketId: number, itemId: string, next: AgentItem) => {
     setItemsByTicket((prev) => ({
@@ -239,11 +262,7 @@ function Index() {
         });
       };
       handlers.onCommandResult = (result: BackendCommandResult) => {
-        const lines = commandResultToLines(result);
-        setTerminalByTicket((prev) => ({
-          ...prev,
-          [tid]: [...(prev[tid] ?? []), ...lines],
-        }));
+        const lines = appendTerminalResult(tid, result);
         updateAction(tid, result.id, (a) => ({
           ...a,
           status: result.exit_code === 0 ? "succeeded" : "failed",
@@ -522,11 +541,7 @@ function Index() {
 
       if ("exit_code" in result) {
         const cr = result as BackendCommandResult;
-        const lines = commandResultToLines(cr);
-        setTerminalByTicket((prev) => ({
-          ...prev,
-          [selectedId]: [...(prev[selectedId] ?? []), ...lines],
-        }));
+        const lines = appendTerminalResult(selectedId, cr);
         updateAction(selectedId, actionId, (a) => ({
           ...a,
           status: cr.exit_code === 0 ? "succeeded" : "failed",
@@ -591,6 +606,9 @@ function Index() {
     if (!selectedId) return;
     pushLog({ ticket_id: selectedId, level: "info", text: "Retrying action" });
     setTerminalByTicket((prev) => ({ ...prev, [selectedId]: [] }));
+    // Re-running yields a result with the same id; forget it so the retried
+    // output streams to the freshly cleared terminal instead of being deduped.
+    streamedResultIdsRef.current.delete(actionId);
     void handleApprove(actionId, false);
   };
 
@@ -635,6 +653,49 @@ function Index() {
   const handleToggleBreakpoint = (actionId: string) => {
     if (!selectedId) return;
     updateAction(selectedId, actionId, (a) => ({ ...a, breakpoint: !a.breakpoint }));
+  };
+
+  // ─── run all (auto-approve sequentially, honoring breakpoints) ─────────────
+  // Approves and runs each currently-proposed command in order, awaiting the
+  // result before moving on. Stops at the first command flagged with a
+  // breakpoint (pausing *before* it, like a debugger) or one the guardrail has
+  // hard-blocked — those still need an explicit, deliberate approval.
+  const handleRunAll = async () => {
+    if (!selectedId || runningAll) return;
+    const proposed = (itemsByTicket[selectedId] ?? []).filter(
+      (i): i is AgentAction => i.kind === "action" && i.status === "proposed",
+    );
+    if (proposed.length === 0) return;
+
+    setRunningAll(true);
+    pushLog({
+      ticket_id: selectedId,
+      level: "info",
+      text: "Run all — executing proposed commands in sequence",
+    });
+    try {
+      for (const action of proposed) {
+        if (action.breakpoint) {
+          pushLog({
+            ticket_id: selectedId,
+            level: "warn",
+            text: `Run all paused at breakpoint — ${action.command}`,
+          });
+          break;
+        }
+        if (action.guardrail.level === "blocked") {
+          pushLog({
+            ticket_id: selectedId,
+            level: "danger",
+            text: `Run all paused — blocked command needs explicit override: ${action.command}`,
+          });
+          break;
+        }
+        await handleApprove(action.id, false);
+      }
+    } finally {
+      setRunningAll(false);
+    }
   };
 
   // ─── chat with agent ──────────────────────────────────────────────────────
@@ -817,6 +878,8 @@ function Index() {
           onRetry={handleRetry}
           onAbort={handleAbort}
           onToggleBreakpoint={handleToggleBreakpoint}
+          onRunAll={() => void handleRunAll()}
+          runningAll={runningAll}
           onSendChat={(msg) => void handleChat(msg)}
         />
         <ActivityLog
