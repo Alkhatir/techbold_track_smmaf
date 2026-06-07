@@ -2,6 +2,8 @@ import { useState } from "react";
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
+  ChevronRight,
   Flag,
   Pencil,
   RotateCcw,
@@ -33,6 +35,7 @@ export function ActionCard({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(action.command);
   const [confirming, setConfirming] = useState(false);
+  const [outputOpen, setOutputOpen] = useState(false);
 
   const liveGuardrail = editing ? checkGuardrail(draft) : action.guardrail;
   const blocked = liveGuardrail.level === "blocked";
@@ -172,6 +175,26 @@ export function ActionCard({
           </div>
         )}
       </div>
+
+      {action.output.length > 0 && (
+        <div className="border-t border-border">
+          <button
+            onClick={() => setOutputOpen((o) => !o)}
+            className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          >
+            {outputOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+            Output
+            <span className="font-mono lowercase tracking-normal text-muted-foreground/70">
+              ({action.output.length} {action.output.length === 1 ? "line" : "lines"})
+            </span>
+          </button>
+          {outputOpen && (
+            <pre className="max-h-72 overflow-auto border-t border-border bg-terminal-bg px-3 py-2 font-mono text-[12px] leading-relaxed text-foreground/90">
+              {action.output.join("\n")}
+            </pre>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/40 px-3 py-2">
         {pending && !editing && (

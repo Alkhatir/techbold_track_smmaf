@@ -133,6 +133,20 @@ function Index() {
     setItemsByTicket((prev) => ({ ...prev, [ticketId]: [...(prev[ticketId] ?? []), ...items] }));
   }, []);
 
+  // Append proposed-command actions, skipping any whose id is already present.
+  // Both the HTTP analyze/propose-fix response and the WebSocket
+  // `pending_command` broadcast deliver the same commands, so dedup by id keeps
+  // them from showing up twice.
+  const appendActions = useCallback((ticketId: number, actions: AgentAction[]) => {
+    setItemsByTicket((prev) => {
+      const existing = prev[ticketId] ?? [];
+      const seen = new Set(existing.filter((i) => i.kind === "action").map((i) => i.id));
+      const toAdd = actions.filter((a) => !seen.has(a.id));
+      if (toAdd.length === 0) return prev;
+      return { ...prev, [ticketId]: [...existing, ...toAdd] };
+    });
+  }, []);
+
   const replaceItem = useCallback((ticketId: number, itemId: string, next: AgentItem) => {
     setItemsByTicket((prev) => ({
       ...prev,
@@ -323,9 +337,9 @@ function Index() {
     // Replace the placeholder with the structured initial analysis
     replaceItem(id, analyzingId, analysisToItem(analysis, analyzingId));
 
-    // Show proposed commands
+    // Show proposed commands (deduped against any WebSocket broadcast)
     if (pending_commands.length > 0) {
-      appendItems(id, pending_commands.map(proposedCommandToAction));
+      appendActions(id, pending_commands.map(proposedCommandToAction));
       pushLog({
         ticket_id: id,
         level: "info",
@@ -674,7 +688,7 @@ function Index() {
       const { fix_plan, pending_commands } = await api.agent.proposeFix(sessionId);
       appendItems(selectedId, fixPlanToItems(fix_plan));
       if (pending_commands.length > 0) {
-        appendItems(selectedId, pending_commands.map(proposedCommandToAction));
+        appendActions(selectedId, pending_commands.map(proposedCommandToAction));
         pushLog({
           ticket_id: selectedId,
           level: "info",

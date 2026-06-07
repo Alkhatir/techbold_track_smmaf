@@ -33,7 +33,6 @@ class SSHRunner:
             paramiko.RSAKey,
             paramiko.Ed25519Key,
             paramiko.ECDSAKey,
-            paramiko.DSSKey,
         ]
         last_exc: Exception | None = None
         for klass in key_classes:

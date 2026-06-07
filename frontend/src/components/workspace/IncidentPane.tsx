@@ -41,9 +41,15 @@ export function IncidentPane({
   const [chatDraft, setChatDraft] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const feedEndRef = useRef<HTMLDivElement>(null);
+  const prevItemCount = useRef(0);
 
+  // Only auto-scroll when a *new* item is appended — not on in-place updates
+  // (e.g. approving a command flips its status, which must not yank the view).
   useEffect(() => {
-    feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (items.length > prevItemCount.current) {
+      feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    prevItemCount.current = items.length;
   }, [items]);
 
   const handleSendChat = async () => {
@@ -91,7 +97,7 @@ export function IncidentPane({
       </div>
 
       <div className="flex h-9 shrink-0 items-center border-b border-border bg-card">
-        <TabBtn active={tab === "diagnosis"} onClick={() => setTab("diagnosis")}>Diagnosis</TabBtn>
+        <TabBtn active={tab === "diagnosis"} onClick={() => setTab("diagnosis")}>Diagnosis &amp; fix</TabBtn>
         <TabBtn active={tab === "terminal"} onClick={() => setTab("terminal")}>Terminal</TabBtn>
         <TabBtn active={tab === "info"} onClick={() => setTab("info")}>Ticket info</TabBtn>
         {awaiting && (
