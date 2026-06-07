@@ -104,6 +104,11 @@ function Index() {
   const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const wsRef = useRef<Record<number, WebSocket>>({});
 
+  // Command-result ids already streamed to the terminal. Both the HTTP
+  // approveCommand response and the WebSocket `command_result` broadcast deliver
+  // the same result, so we track ids to keep the output from appearing twice.
+  const streamedResultIdsRef = useRef<Set<string>>(new Set());
+
   // WebSocket handlers stored in a ref so closures in ws.onmessage always call latest version
   const wsHandlersRef = useRef<Record<number, WsHandlers>>({});
 
@@ -146,6 +151,23 @@ function Index() {
       return { ...prev, [ticketId]: [...existing, ...toAdd] };
     });
   }, []);
+
+  // Append a command result's output to the terminal, skipping it if this result
+  // id was already streamed (e.g. via the other of HTTP response / WebSocket
+  // broadcast). Returns the lines so callers can also attach them to the action.
+  const appendTerminalResult = useCallback(
+    (ticketId: number, result: BackendCommandResult): string[] => {
+      const lines = commandResultToLines(result);
+      if (streamedResultIdsRef.current.has(result.id)) return lines;
+      streamedResultIdsRef.current.add(result.id);
+      setTerminalByTicket((prev) => ({
+        ...prev,
+        [ticketId]: [...(prev[ticketId] ?? []), ...lines],
+      }));
+      return lines;
+    },
+    [],
+  );
 
   const replaceItem = useCallback((ticketId: number, itemId: string, next: AgentItem) => {
     setItemsByTicket((prev) => ({
@@ -239,11 +261,7 @@ function Index() {
         });
       };
       handlers.onCommandResult = (result: BackendCommandResult) => {
-        const lines = commandResultToLines(result);
-        setTerminalByTicket((prev) => ({
-          ...prev,
-          [tid]: [...(prev[tid] ?? []), ...lines],
-        }));
+        const lines = appendTerminalResult(tid, result);
         updateAction(tid, result.id, (a) => ({
           ...a,
           status: result.exit_code === 0 ? "succeeded" : "failed",
@@ -522,11 +540,7 @@ function Index() {
 
       if ("exit_code" in result) {
         const cr = result as BackendCommandResult;
-        const lines = commandResultToLines(cr);
-        setTerminalByTicket((prev) => ({
-          ...prev,
-          [selectedId]: [...(prev[selectedId] ?? []), ...lines],
-        }));
+        const lines = appendTerminalResult(selectedId, cr);
         updateAction(selectedId, actionId, (a) => ({
           ...a,
           status: cr.exit_code === 0 ? "succeeded" : "failed",
@@ -591,6 +605,9 @@ function Index() {
     if (!selectedId) return;
     pushLog({ ticket_id: selectedId, level: "info", text: "Retrying action" });
     setTerminalByTicket((prev) => ({ ...prev, [selectedId]: [] }));
+    // Re-running yields a result with the same id; forget it so the retried
+    // output streams to the freshly cleared terminal instead of being deduped.
+    streamedResultIdsRef.current.delete(actionId);
     void handleApprove(actionId, false);
   };
 
