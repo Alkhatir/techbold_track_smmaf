@@ -98,6 +98,7 @@ function Index() {
   const [sessionIdByTicket, setSessionIdByTicket] = useState<Record<number, string>>({});
   const [activityDraftByTicket, setActivityDraftByTicket] = useState<Record<number, BackendActivityDraft>>({});
   const [generatingActivity, setGeneratingActivity] = useState(false);
+  const [runningAll, setRunningAll] = useState(false);
 
   // Track whether we're in real-backend mode per ticket
   const backendModeRef = useRef<Record<number, boolean>>({});
@@ -654,6 +655,49 @@ function Index() {
     updateAction(selectedId, actionId, (a) => ({ ...a, breakpoint: !a.breakpoint }));
   };
 
+  // ─── run all (auto-approve sequentially, honoring breakpoints) ─────────────
+  // Approves and runs each currently-proposed command in order, awaiting the
+  // result before moving on. Stops at the first command flagged with a
+  // breakpoint (pausing *before* it, like a debugger) or one the guardrail has
+  // hard-blocked — those still need an explicit, deliberate approval.
+  const handleRunAll = async () => {
+    if (!selectedId || runningAll) return;
+    const proposed = (itemsByTicket[selectedId] ?? []).filter(
+      (i): i is AgentAction => i.kind === "action" && i.status === "proposed",
+    );
+    if (proposed.length === 0) return;
+
+    setRunningAll(true);
+    pushLog({
+      ticket_id: selectedId,
+      level: "info",
+      text: "Run all — executing proposed commands in sequence",
+    });
+    try {
+      for (const action of proposed) {
+        if (action.breakpoint) {
+          pushLog({
+            ticket_id: selectedId,
+            level: "warn",
+            text: `Run all paused at breakpoint — ${action.command}`,
+          });
+          break;
+        }
+        if (action.guardrail.level === "blocked") {
+          pushLog({
+            ticket_id: selectedId,
+            level: "danger",
+            text: `Run all paused — blocked command needs explicit override: ${action.command}`,
+          });
+          break;
+        }
+        await handleApprove(action.id, false);
+      }
+    } finally {
+      setRunningAll(false);
+    }
+  };
+
   // ─── chat with agent ──────────────────────────────────────────────────────
   const handleChat = async (message: string) => {
     if (!selectedId) return;
@@ -834,6 +878,8 @@ function Index() {
           onRetry={handleRetry}
           onAbort={handleAbort}
           onToggleBreakpoint={handleToggleBreakpoint}
+          onRunAll={() => void handleRunAll()}
+          runningAll={runningAll}
           onSendChat={(msg) => void handleChat(msg)}
         />
         <ActivityLog
